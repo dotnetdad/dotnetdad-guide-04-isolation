@@ -46,6 +46,10 @@ namespace Tickets.Migrations
                     b.HasKey("Id")
                         .HasName("pk_seats");
 
+                    b.HasIndex("ConcertId", "SoldTo")
+                        .HasDatabaseName("ix_seats_concert_id_sold_to")
+                        .HasFilter("sold_to IS NOT NULL");
+
                     b.ToTable("seats", (string)null);
                 });
 #pragma warning restore 612, 618

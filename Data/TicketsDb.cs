@@ -12,5 +12,8 @@ public class TicketsDb(DbContextOptions<TicketsDb> options)
         modelBuilder.Entity<Seat>()
             .Property(s => s.Price)
             .HasPrecision(10, 2);
+        modelBuilder.Entity<Seat>()
+            .HasIndex(s => new { s.ConcertId, s.SoldTo })
+            .HasFilter("sold_to IS NOT NULL");
     }
 }

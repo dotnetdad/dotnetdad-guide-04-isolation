@@ -28,3 +28,6 @@ services:
       Mistakes__LostUpdate: "${Mistakes__LostUpdate:-false}"
       Mistakes__RepeatableReadBuy: "${Mistakes__RepeatableReadBuy:-false}"
       Mistakes__ReportTwoSnapshots: "${Mistakes__ReportTwoSnapshots:-false}"
+      Mistakes__LimitReadCommitted: "${Mistakes__LimitReadCommitted:-false}"
+      Mistakes__SerializableNoRetry: "${Mistakes__SerializableNoRetry:-false}"
+      Mistakes__ReportOutsideStrategy: "${Mistakes__ReportOutsideStrategy:-false}"

@@ -4,16 +4,22 @@ using Tickets.Demo;
 using Tickets.Mistakes;
 using Tickets.Purchases;
 using Tickets.Reports;
+using Tickets.Sms;
 
 var builder = WebApplication.CreateBuilder(args);
 
 var tickets = builder.Configuration
     .GetConnectionString("Tickets");
 builder.Services.AddDbContext<TicketsDb>(o => o
-    .UseNpgsql(tickets)
+    .UseNpgsql(tickets, npgsql => npgsql
+        .EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(1),
+            errorCodesToAdd: null))
     .UseSnakeCaseNamingConvention());
 builder.AddDemoPause();
 builder.AddHandlers();
+builder.Services.AddSms();
 builder.Services.AddProblemDetails();
 
 var app = builder.Build();
@@ -21,16 +27,22 @@ app.UseExceptionHandler();
 await app.PrepareDatabaseAsync();
 
 app.MapPost("/buy", async (BuyRequest r,
-    IBuyHandler handler, CancellationToken ct) =>
+    IBuyHandler handler, HttpResponse response,
+    CancellationToken ct) =>
 {
-    if (string.IsNullOrWhiteSpace(r.Phone))
-        return Problem(400, "Нужен телефон");
-    var result = await handler.BuyAsync(r, ct);
+    if (!Phones.TryToE164(r.Phone, out var phone))
+        return Problem(400, "Неверный телефон");
+    var result = await handler.BuyAsync(
+        r with { Phone = phone }, ct);
+    if (result == BuyResult.Busy)
+        response.Headers.RetryAfter = "1";
     return result switch
     {
         BuyResult.Ok => Results.Ok(),
         BuyResult.NotFound => Problem(404, "Места нет"),
-        _ => Problem(409, "Место занято"),
+        BuyResult.Taken => Problem(409, "Место занято"),
+        BuyResult.Limit => Problem(409, "Лимит: 4 билета"),
+        _ => Problem(503, "Попробуйте ещё раз"),
     };
 });
 

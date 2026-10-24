@@ -9,13 +9,17 @@ sql() {
   docker compose exec -T db psql -U tickets -d tickets -q -t -A -c "$1"
 }
 
-# Покупка: концерт, место, телефон, кто покупает. Печатает HTTP-код ответа.
+# Покупка: концерт, место, телефон, кто покупает.
+# Печатает HTTP-код ответа, заголовок ошибки и Retry-After, если они есть.
 buy() {
-  local code
-  code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/buy" \
+  local resp code title retry
+  resp=$(curl -s -i -X POST "$API/buy" \
     -H 'Content-Type: application/json' \
     -d "{\"concertId\":$1,\"seatId\":$2,\"phone\":\"$3\"}")
-  echo "$4, место $2: $code"
+  code=$(echo "$resp" | head -1 | cut -d' ' -f2)
+  title=$(echo "$resp" | grep -o '"title":"[^"]*"' | cut -d'"' -f4)
+  retry=$(echo "$resp" | grep -i '^retry-after:' | tr -d '\r' | awk '{print $2}')
+  echo "$4, место $2: $code${title:+ «$title»}${retry:+, Retry-After: $retry}"
 }
 
 # Сбросить места и прогреть сервис: первый запрос после старта медленнее

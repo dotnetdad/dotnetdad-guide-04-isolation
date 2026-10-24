@@ -9,6 +9,14 @@ public class ReportHandler(TicketsDb db) : IReportHandler
     public async Task<Report> GetAsync(
         int concertId, CancellationToken ct)
     {
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(
+            token => ReadInSnapshotAsync(concertId, token), ct);
+    }
+
+    private async Task<Report> ReadInSnapshotAsync(
+        int concertId, CancellationToken ct)
+    {
         await using var tx = await db.Database
             .BeginTransactionAsync(
                 IsolationLevel.RepeatableRead, ct);
