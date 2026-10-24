@@ -1,0 +1,26 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: tickets
+      POSTGRES_PASSWORD: tickets
+      POSTGRES_DB: tickets
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tickets -d tickets"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-5080}:8080"
+    environment:
+      ConnectionStrings__Tickets: "Host=db;Database=tickets;Username=tickets;Password=tickets;Gss Encryption Mode=Disable"
+      # Пауза после каждого запроса к базе: гонку видно руками. 0 — без паузы.
+      Demo__PauseMs: "${Demo__PauseMs:-500}"
