@@ -24,3 +24,6 @@ services:
       ConnectionStrings__Tickets: "Host=db;Database=tickets;Username=tickets;Password=tickets;Gss Encryption Mode=Disable"
       # Пауза после каждого запроса к базе: гонку видно руками. 0 — без паузы.
       Demo__PauseMs: "${Demo__PauseMs:-500}"
+      # Анти-примеры: Mistakes__Имя=true docker compose up (имя — класс из Mistakes/).
+      Mistakes__LostUpdate: "${Mistakes__LostUpdate:-false}"
+      Mistakes__RepeatableReadBuy: "${Mistakes__RepeatableReadBuy:-false}"

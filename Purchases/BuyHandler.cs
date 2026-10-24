@@ -8,16 +8,14 @@ public class BuyHandler(TicketsDb db) : IBuyHandler
     public async Task<BuyResult> BuyAsync(
         BuyRequest r, CancellationToken ct)
     {
-        await using var tx = await db.Database
-            .BeginTransactionAsync(ct);
-        var seat = await db.Seats.SingleOrDefaultAsync(
-            s => s.Id == r.SeatId
-                && s.ConcertId == r.ConcertId, ct);
-        if (seat is null) return BuyResult.NotFound;
-        if (seat.SoldTo is not null) return BuyResult.Taken;
-        seat.SoldTo = r.Phone;
-        await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
-        return BuyResult.Ok;
+        var sold = await db.Seats
+            .Where(s => s.Id == r.SeatId && s.SoldTo == null
+                && s.ConcertId == r.ConcertId)
+            .ExecuteUpdateAsync(s =>
+                s.SetProperty(x => x.SoldTo, r.Phone), ct);
+        if (sold == 1) return BuyResult.Ok;
+        var exists = await db.Seats.AnyAsync(s =>
+            s.Id == r.SeatId && s.ConcertId == r.ConcertId, ct);
+        return exists ? BuyResult.Taken : BuyResult.NotFound;
     }
 }

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Tickets.Data;
 using Tickets.Demo;
+using Tickets.Mistakes;
 using Tickets.Purchases;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,7 +12,7 @@ builder.Services.AddDbContext<TicketsDb>(o => o
     .UseNpgsql(tickets)
     .UseSnakeCaseNamingConvention());
 builder.AddDemoPause();
-builder.Services.AddScoped<IBuyHandler, BuyHandler>();
+builder.AddHandlers();
 builder.Services.AddProblemDetails();
 
 var app = builder.Build();
