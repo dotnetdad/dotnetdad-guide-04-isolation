@@ -3,6 +3,7 @@ using Tickets.Data;
 using Tickets.Demo;
 using Tickets.Mistakes;
 using Tickets.Purchases;
+using Tickets.Reports;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,6 +33,10 @@ app.MapPost("/buy", async (BuyRequest r,
         _ => Problem(409, "Место занято"),
     };
 });
+
+app.MapGet("/concerts/{concertId:int}/report",
+    (int concertId, IReportHandler handler,
+        CancellationToken ct) => handler.GetAsync(concertId, ct));
 
 app.Run();
 

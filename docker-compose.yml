@@ -27,3 +27,4 @@ services:
       # Анти-примеры: Mistakes__Имя=true docker compose up (имя — класс из Mistakes/).
       Mistakes__LostUpdate: "${Mistakes__LostUpdate:-false}"
       Mistakes__RepeatableReadBuy: "${Mistakes__RepeatableReadBuy:-false}"
+      Mistakes__ReportTwoSnapshots: "${Mistakes__ReportTwoSnapshots:-false}"

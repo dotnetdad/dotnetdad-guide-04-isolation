@@ -28,3 +28,14 @@ reset_seats() {
   done
   wait
 }
+
+# Отчёт по концерту: итог и сколько мест в списке на вход; второй аргумент — подпись.
+report() {
+  local json sold revenue free listed
+  json=$(curl -s "$API/concerts/$1/report")
+  sold=$(echo "$json" | grep -o '"sold":[0-9]*' | cut -d: -f2)
+  revenue=$(echo "$json" | grep -o '"revenue":[0-9.]*' | cut -d: -f2 | sed 's/\.0*$//')
+  free=$(echo "$json" | grep -o '"free":[0-9]*' | cut -d: -f2)
+  listed=$(echo "$json" | grep -o '"seatId"' | wc -l | tr -d ' ')
+  echo "${2:-Отчёт}: продано $sold на $revenue, свободно $free; в списке на вход $listed"
+}

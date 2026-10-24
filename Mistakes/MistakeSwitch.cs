@@ -1,4 +1,5 @@
 using Tickets.Purchases;
+using Tickets.Reports;
 
 namespace Tickets.Mistakes;
 
@@ -9,6 +10,9 @@ public static class MistakeSwitch
     private static readonly Type[] BuyMistakes =
         [typeof(LostUpdate), typeof(RepeatableReadBuy)];
 
+    private static readonly Type[] ReportMistakes =
+        [typeof(ReportTwoSnapshots)];
+
     public static void AddHandlers(this WebApplicationBuilder builder)
     {
         var on = builder.Configuration.GetSection("Mistakes")
@@ -18,18 +22,21 @@ public static class MistakeSwitch
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var services = builder.Services;
 
-        var unknown = on.Where(n => !BuyMistakes.Any(t =>
+        var known = BuyMistakes.Concat(ReportMistakes).ToList();
+        var unknown = on.Where(n => !known.Any(t =>
             t.Name.Equals(n, StringComparison.OrdinalIgnoreCase))).ToList();
         if (unknown.Count > 0)
             throw new InvalidOperationException(
                 $"Нет такого анти-примера: {string.Join(", ", unknown)}. " +
-                $"На этом теге есть: {string.Join(", ", BuyMistakes.Select(t => t.Name))}.");
+                $"На этом теге есть: {string.Join(", ", known.Select(t => t.Name))}.");
 
         var buy = One(on, BuyMistakes, "покупки");
+        var report = One(on, ReportMistakes, "отчёта");
         services.AddScoped(typeof(IBuyHandler), buy ?? typeof(BuyHandler));
+        services.AddScoped(typeof(IReportHandler), report ?? typeof(ReportHandler));
 
-        if (buy is not null)
-            Console.WriteLine($"Анти-пример включён: {buy.Name}");
+        foreach (var t in new[] { buy, report }.OfType<Type>())
+            Console.WriteLine($"Анти-пример включён: {t.Name}");
     }
 
     // Два анти-примера одного обработчика сразу не работают: эндпоинт берёт один.
