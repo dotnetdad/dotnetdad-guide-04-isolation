@@ -12,10 +12,10 @@ public class BuyHandler(TicketsDb db, ISmsQueue sms)
     public async Task<BuyResult> BuyAsync(
         BuyRequest r, CancellationToken ct)
     {
-        var retry = db.Database.CreateExecutionStrategy();
+        var strategy = db.Database.CreateExecutionStrategy();
         try
         {
-            var result = await retry.ExecuteAsync(
+            var result = await strategy.ExecuteAsync(
                 token => TryBuyAsync(r, token), ct);
             if (result == BuyResult.Ok)
                 sms.Enqueue(r.Phone, "Билет ваш");
