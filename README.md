@@ -134,3 +134,35 @@ bash scripts/two-tabs.sh
 - **Тест гонки.** Testcontainers: две вкладки одного телефона на Serializable — один 40001, повтор, итог 4 билета.
 - **Ключ блокировки по ключу.** `pg_advisory_xact_lock(concert_id, key)` — ключ из телефона считай одинаково во всех экземплярах сервиса: `string.GetHashCode` между процессами не стабилен — два запуска одной программы могут дать разные значения (документация `String.GetHashCode`, Remarks), и у двух экземпляров ключи разойдутся — блокировка их не упорядочит, лимит пробит без ошибки. Бери детерминированный хэш (например, `XxHash32` из `System.IO.Hashing`) или считай ключ в SQL; в проекте блокировки по ключу нет.
 - **Текст отказа и константа лимита.** `"Лимит: 4 билета"` в эндпоинте и `MaxSeatsPerPhone` в покупке — две точки одного числа; в своём сервисе бери текст из той же константы или отдавай число полем ProblemDetails.
+
+## Источники
+
+Документация и исходники, на которые опирается видео: умолчания баз и драйверов, поведение уровней, решения команд PostgreSQL, Npgsql и EF Core. В порядке видео.
+
+- [PostgreSQL: транзакция — всё или ничего](https://www.postgresql.org/docs/17/tutorial-transactions.html)
+- [PostgreSQL: аномалии и уровни изоляции, Read Committed по умолчанию, перепроверка WHERE](https://www.postgresql.org/docs/17/transaction-iso.html)
+- [PostgreSQL: версии строк (MVCC) — чтение не ждёт записи, запись не ждёт чтения](https://www.postgresql.org/docs/17/mvcc-intro.html)
+- [PostgreSQL: как Serializable запоминает прочитанное (README-SSI)](https://github.com/postgres/postgres/blob/REL_17_11/src/backend/storage/lmgr/README-SSI)
+- [PostgreSQL: ошибка сериализации на коммите (predicate.c)](https://github.com/postgres/postgres/blob/REL_17_11/src/backend/storage/lmgr/predicate.c#L4716)
+- [PostgreSQL: отчёт на одном снапшоте, Serializable защищает только от транзакций того же уровня](https://www.postgresql.org/docs/17/applevel-consistency.html)
+- [PostgreSQL: default_transaction_isolation](https://www.postgresql.org/docs/17/runtime-config-client.html)
+- [MySQL InnoDB: Repeatable Read по умолчанию](https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html)
+- [MySQL InnoDB: SELECT читает снапшот, UPDATE — последнюю закоммиченную версию](https://dev.mysql.com/doc/refman/8.4/en/innodb-consistent-read.html)
+- [MySQL InnoDB: версии строк](https://dev.mysql.com/doc/refman/8.4/en/innodb-multi-versioning.html)
+- [SQL Server: Read Committed на блокировках, READ_COMMITTED_SNAPSHOT, умолчание Azure SQL Database](https://learn.microsoft.com/sql/relational-databases/sql-server-transaction-locking-and-row-versioning-guide)
+- [SQL Server: NOLOCK — это READUNCOMMITTED](https://learn.microsoft.com/sql/t-sql/queries/hints-transact-sql-table)
+- [SQL Server: ускоренное восстановление (ADR) — версии строк в самой базе](https://learn.microsoft.com/sql/relational-databases/accelerated-database-recovery-concepts)
+- [Npgsql: транзакция без уровня открывается на Read Committed](https://github.com/npgsql/npgsql/blob/v10.0.3/src/Npgsql/NpgsqlTransaction.cs#L67)
+- [EF Core: SaveChanges и своя транзакция](https://learn.microsoft.com/ef/core/saving/transactions)
+- [EF Core 7: одна команда SaveChanges идёт без явной транзакции](https://learn.microsoft.com/ef/core/what-is-new/ef-core-7.0/whatsnew)
+- [.NET: TransactionScope без параметров — Serializable](https://learn.microsoft.com/dotnet/framework/data/transactions/implementing-an-implicit-transaction-using-transaction-scope)
+- [Npgsql: транзакция с уровнем, который попросил TransactionScope](https://github.com/npgsql/npgsql/blob/v10.0.3/src/Npgsql/VolatileResourceManager.cs#L43)
+- [PostgreSQL: SELECT FOR UPDATE и блокировки по ключу (advisory lock)](https://www.postgresql.org/docs/17/explicit-locking.html)
+- [PostgreSQL: VACUUM не убирает версии строк, пока их видит открытый снапшот](https://www.postgresql.org/docs/17/routine-vacuuming.html)
+- [Npgsql EF Core: токен конкурентности xmin](https://www.npgsql.org/efcore/modeling/concurrency.html)
+- [ASP.NET Core: ответы с ошибкой в API (ProblemDetails)](https://learn.microsoft.com/aspnet/core/fundamentals/error-handling-api?view=aspnetcore-10.0)
+- [EF Core: стратегия выполнения — повтор и транзакции](https://learn.microsoft.com/ef/core/miscellaneous/connection-resiliency)
+- [Npgsql: ошибка сериализации 40001 — временный сбой](https://github.com/npgsql/npgsql/blob/v10.0.3/src/Npgsql/PostgresException.cs#L219)
+- [Npgsql EF Core: стратегия выполнения с повтором](https://github.com/npgsql/efcore.pg/blob/v10.0.3/src/EFCore.PG/NpgsqlRetryingExecutionStrategy.cs)
+- [EF Core: по умолчанию шесть повторов и пауза до 30 секунд](https://github.com/dotnet/efcore/blob/v10.0.13/src/EFCore/Storage/ExecutionStrategy.cs#L32)
+- [EF Core: повторы кончились — RetryLimitExceededException](https://github.com/dotnet/efcore/blob/v10.0.13/src/EFCore/Storage/ExecutionStrategy.cs#L251)
