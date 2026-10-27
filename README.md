@@ -1,25 +1,110 @@
-# dotnetdad-guide-04-isolation
+# Уровни изоляции транзакций: EF Core и PostgreSQL
 
-Сквозной проект гайда «Уровни изоляции транзакций» канала «Папочка Разработки»: сервис продажи билетов на концерт на ASP.NET Core 10, EF Core и PostgreSQL. Код по разделам гайда — теги, у каждого тега ниже: что изменилось, что попробовать руками и что почитать дальше.
+Код к видео [«Уровни изоляции транзакций в SQL: от теории до кода»](https://www.youtube.com/watch?v=_IVRzj94z4w) с канала «Папочка Разработки».
 
-## Запуск
+Внутри сервис продажи билетов на концерт: ASP.NET Core 10, EF Core и PostgreSQL 17. Два покупателя берут одно место в одну секунду. Организатор открывает отчёт посреди продаж. Покупатель обходит лимит «четыре билета в одни руки» из двух вкладок. Каждую гонку запускает скрипт и показывает, что легло в базу: сначала с ошибкой из видео, потом с починкой.
+
+У каждого раздела видео свой тег. Переключись на тег, и перед тобой код, который был на экране в конце раздела.
+
+## Что нужно
+
+- **Docker** — Docker Desktop или Docker Engine с Compose v2. Для запуска больше ничего не нужно, .NET ставить не обязательно.
+- **bash и curl** — для сценариев из `scripts/`. На macOS и Linux они есть, на Windows — Git Bash (ставится вместе с Git) или WSL.
+- **.NET 10 SDK** — только если запускаешь сервис из IDE.
+
+## Быстрый старт
 
 ```bash
+git clone https://github.com/dotnetdad/transaction-isolation-efcore.git
+cd transaction-isolation-efcore
 docker compose up --build
 ```
 
-Поднимаются PostgreSQL 17 и сервис на `http://localhost:5080` (порт меняет `API_PORT`). При старте сервис применяет миграции и заводит места: концерт 7 — места 1–200, концерт 8 — места 201–400, всё по 3000. На чистой базе первый старт пишет в лог одну строку `fail: Microsoft.EntityFrameworkCore.Database.Command` о запросе к `__EFMigrationsHistory`: EF Core ищет таблицу миграций до того, как создать её. Это не сбой, следующая строка лога — применение миграций.
+Первая сборка скачивает образы .NET и PostgreSQL, это несколько минут. Сервис готов, когда в логе появилась строка `Application started`. Он слушает `http://localhost:5080`, база — `localhost:5432` (пользователь, пароль и имя базы — `tickets`). При старте сервис применяет миграции и заводит места: концерт 7 — места 1–200, концерт 8 — места 201–400, всё по 3000.
+
+На чистой базе первый старт пишет в лог одну строку `fail: Microsoft.EntityFrameworkCore.Database.Command` о запросе к `__EFMigrationsHistory`: EF Core ищет таблицу миграций до того, как создать её. Это не сбой, следующая строка лога — применение миграций.
+
+Во втором терминале, в той же папке:
 
 ```bash
-curl -X POST http://localhost:5080/buy -H 'Content-Type: application/json' \
-  -d '{"concertId":7,"seatId":14,"phone":"+79990000001"}'
+bash scripts/two-buyers.sh
 ```
+
+Аня и Борис покупают место 14 в одну секунду. На `main` Аня получает 200, Борис — 409 «Место занято», место за Аней. На теге `00-start` оба получают 200, и место молча уходит Борису.
+
+Одна покупка руками:
+
+```bash
+curl -i -X POST http://localhost:5080/buy -H 'Content-Type: application/json' \
+  -d '{"concertId":7,"seatId":20,"phone":"+79990000001"}'
+curl http://localhost:5080/concerts/7/report
+```
+
+В PowerShell:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:5080/buy -ContentType application/json -Body '{"concertId":7,"seatId":20,"phone":"+79990000001"}'
+Invoke-RestMethod http://localhost:5080/concerts/7/report
+```
+
+Остановить: Ctrl+C, потом `docker compose down -v`. Флаг `-v` удаляет базу, и следующий старт заведёт места заново.
+
+## Теги
+
+| Тег | Раздел видео | Сценарии |
+|---|---|---|
+| `00-start` | Вступление: место 14 продали двоим | `two-buyers.sh` |
+| `01-conditional-update` | Место 14: UPDATE с условием | `two-buyers.sh` |
+| `02-report-snapshot` | Отчёт организатора на одном снимке | `report-during-buy.sh` |
+| `03-limit-serializable` | Лимит в одни руки: Serializable с повтором | `two-tabs.sh`, `start-of-sales.sh` |
+
+В `main` код последнего раздела и этот README. Переключиться на раздел, например на первый:
+
+```bash
+docker compose down -v
+git checkout 01-conditional-update
+docker compose up --build
+```
+
+`down -v` нужен: у каждого тега своя схема, и создаётся она на старте. На теге лежит README того времени, полный — этот, в `main` (`git show main:README.md`). Вернуться: `git checkout main`.
+
+## Как устроен код
+
+- `Program.cs` — эндпоинты `POST /buy` и `GET /concerts/{id}/report`, EF Core с повтором при сбоях.
+- `Purchases/` — покупка: `BuyHandler.cs` и формат телефона `Phones.cs`.
+- `Reports/` — отчёт организатора (с тега `02`).
+- `Sms/` — очередь СМС «Билет ваш» (с тега `03`), учебный провайдер пишет СМС в лог.
+- `Data/` — контекст, сущность `Seat`, подготовка базы при старте; `Migrations/` — миграции EF Core.
+- `Mistakes/` — анти-примеры из видео, по классу на ошибку.
+- `Demo/PauseAfterQuery.cs` — пауза после запросов к базе, чтобы гонку было видно.
+- `scripts/` — сценарии «Что попробовать».
+
+## Пауза, анти-примеры, сценарии
 
 **Пауза для гонок.** Гонка двух покупок длится миллисекунды, и руками её не поймать. Поэтому в `docker compose` сервис после каждого запроса к базе ждёт 500 мс (`Demo__PauseMs`, класс `Demo/PauseAfterQuery.cs`). В коде покупки её нет, она только раздвигает запросы во времени. Без паузы: `Demo__PauseMs=0 docker compose up`.
 
 **Анти-примеры.** Ошибки разделов гайда лежат классами в `Mistakes/` и включаются настройкой `Mistakes__Имя=true`, где имя — класс: `Mistakes__LostUpdate=true docker compose up -d` (в PowerShell — `$env:Mistakes__LostUpdate="true"; docker compose up -d`, потом `Remove-Item env:Mistakes__LostUpdate`). Эндпоинт берёт `IBuyHandler`, а `Mistakes/MistakeSwitch.cs` регистрирует настоящий обработчик или анти-пример по флагу; включённый анти-пример сервис пишет в лог при старте. Включай по одному: два флага одного обработчика или флаг, которого на теге нет, — и сервис не стартует, а в логе написано почему. Вернуть настоящий обработчик — `docker compose up -d` без флага. Анти-пример воспроизводится на теге своего раздела и дальше.
 
-**Сценарии «Что попробовать»** — скрипты в `scripts/` на bash и curl (на Windows — Git Bash или WSL). Они сами сбрасывают места через `docker compose exec db psql` и печатают коды ответов и то, что лежит в базе.
+**Сценарии «Что попробовать»** — скрипты в `scripts/` на bash и curl. Они сами сбрасывают места через `docker compose exec db psql` и печатают коды ответов и то, что лежит в базе. Запускай их из корня репозитория, когда сервис уже стартовал.
+
+## Запуск из IDE
+
+База — из compose, сервис — из IDE или консоли:
+
+```bash
+docker compose up -d --wait db
+dotnet run --urls http://localhost:5080 --Demo:PauseMs=500
+```
+
+В Rider или Visual Studio открой `Tickets.csproj` и задай в конфигурации запуска переменные `ASPNETCORE_URLS=http://localhost:5080` и `Demo__PauseMs=500`: без паузы гонку не поймать. Строка подключения в `appsettings.json` уже смотрит на базу из compose. Анти-пример из консоли — `--Mistakes:LostUpdate=true`, из IDE — переменная `Mistakes__LostUpdate=true`.
+
+Сценарии работают так же. Только счётчики СМС и повторов в `two-tabs.sh` и `start-of-sales.sh` читают лог контейнера `api` и покажут 0: смотри эти строки в консоли сервиса.
+
+## Если что-то не так
+
+- **Порт занят** (`port is already allocated`, `address already in use`) — у тебя уже работает свой PostgreSQL или другой сервис. Подними на других портах: `API_PORT=5090 DB_PORT=5433 docker compose up --build`, и сценарии на новом адресе: `API=http://localhost:5090 bash scripts/two-buyers.sh`. В PowerShell — `$env:API_PORT=5090; $env:DB_PORT=5433; docker compose up --build`.
+- **Запросы на `localhost` висят, а на `127.0.0.1` отвечают** — порт на IPv6 (`::1`) держит другой процесс, на Windows часто WSL. Ходи на `127.0.0.1`: `API=http://127.0.0.1:5080 bash scripts/two-buyers.sh`. Из IDE то же для базы: `Host=127.0.0.1` в строке подключения.
+- **Скрипт пишет `relation "seats" does not exist`** — сервис ещё не стартовал и не создал таблицы. Дождись `Application started` в логе.
 
 ## `00-start` — наивная покупка
 
